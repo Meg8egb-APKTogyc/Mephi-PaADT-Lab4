@@ -1,9 +1,12 @@
 #pragma once
-#include <vector>
+#include "Sequence/Sequence.hpp"
 #include <functional>
 #include <iostream>
 #include <string>
 #include <queue>
+#include <math.h>
+#include <iomanip>
+#include <sstream>
 
 
 template<typename T>
@@ -19,16 +22,6 @@ private:
     };
 
     Node* root;
-
-public:
-    enum class Traversal {
-        KLP,  // Корень-Лево-Право (pre-order)
-        KPL,  // Корень-Право-Лево
-        LKP,  // Лево-Корень-Право (in-order)
-        LPK,  // Лево-Право-Корень (post-order)
-        PKL,  // Право-Корень-Лево
-        PLK   // Право-Лево-Корень
-    };
 
 private:
     int height(Node* node) const {
@@ -46,7 +39,7 @@ private:
     void updateNode(Node* node) {
         if (node) {
             node->height = 1 + std::max(height(node->left), height(node->right));
-            node->size = 1 + size(node->left) + size(node->right);
+            node->size = 1 + (node->left ? node->left->size : 0) + (node->right ? node->right->size : 0);
         }
     }
 
@@ -70,8 +63,8 @@ private:
         y->left = x;
         x->right = T2;
 
-        updateNode(y);
         updateNode(x);
+        updateNode(y);
 
         return y;
     }
@@ -87,9 +80,11 @@ private:
             return rotateLeft(node);
         } else if (bf > 1 && balanceFactor(node->left) < 0) {
             node->left = rotateLeft(node->left);
+            updateNode(node);
             return rotateRight(node);
         } else if (bf < -1 && balanceFactor(node->right) > 0) {
             node->right = rotateRight(node->right);
+            updateNode(node);
             return rotateLeft(node);
         }
 
@@ -121,22 +116,23 @@ private:
     Node* remove(Node* node, const T& val) {
         if (!node) return node;
 
-        if (val < node->data)
+        if (val < node->data) {
             node->left = remove(node->left, val);
-        else if (node->data < val)
+        } else if (node->data < val) {
             node->right = remove(node->right, val);
-        else {
+        } else {
             if (!node->left || !node->right) {
                 Node* temp = node->left ? node->left : node->right;
-
                 if (!temp) {
-                    temp = node;
-                    node = nullptr;
+                    delete node;
+                    return nullptr;
                 } else {
-                    *node = *temp;
-                }
+                    node->data = temp->data;
+                    node->left = temp->left;
+                    node->right = temp->right;
 
-                delete temp;
+                    delete temp;
+                }
             } else {
                 Node* temp = findMin(node->right);
                 node->data = temp->data;
@@ -144,8 +140,7 @@ private:
             }
         }
 
-        if (!node) return node;
-
+        updateNode(node);
         return balance(node);
     }
 
@@ -168,23 +163,12 @@ private:
         }
     }
     
-    void traverse(Node* node, std::vector<std::pair<T, int>>& result, int height, Traversal type) const {
+    void traverse(Node* node, Sequence<std::pair<T, int>>& result, int height, std::string type="LKP") const {
         if (!node) return;
-
-        static constexpr std::array<std::array<int, 3>, 6> orders = {{
-            {0, 1, 2}, // KLP
-            {0, 2, 1}, // KPL
-            {1, 0, 2}, // LKP
-            {1, 2, 0}, // LPK
-            {2, 0, 1}, // PKL
-            {2, 1, 0}  // PLK
-        }};
         
-        const auto& order = orders[static_cast<int>(type)];
-        
-        for (int step : order) {
-            if (step == 0) result.emplace_back(node->data, height);
-            else if (step == 1) traverse(node->left, result, height + 1, type);
+        for (int i = 0; i < 3; ++i) {
+            if (type[i] == 'K') result.Append(std::make_pair(node->data, height));
+            else if (type[i] == 'L') traverse(node->left, result, height + 1, type);
             else traverse(node->right, result, height + 1, type);
         }
     }
@@ -215,11 +199,13 @@ private:
         }
         
         if (left && right) {
-            std::vector<std::pair<T, int>> vec;
-            traverse(left, vec, 1, Traversal::LKP);
+            MutableArraySequence<std::pair<T, int>> vec;
+            traverse(left, vec, 1, "LKP");
 
-            for (auto [val, hei] : vec)
+            for (int i = 0; i < vec.GetLength(); ++i) {
+                auto val = vec.Get(i).first;
                 right = insert(right, val);
+            }
             
             return right;
         }
@@ -234,6 +220,10 @@ public:
         clear();
     }
 
+    int size() {
+        return this->size(root);
+    }
+
     void insert(const T& val) {
         root = insert(root, val);
     }
@@ -243,7 +233,7 @@ public:
     }
 
     bool contains(const T& val) {
-        return contains(root, val);
+        return this->contains(root, val);
     }
 
     void clear() {
@@ -255,8 +245,8 @@ public:
         return root == nullptr;
     }
     
-    std::vector<std::pair<T, int>> traverse(Traversal type = Traversal::LKP) const {
-        std::vector<std::pair<T, int>> result;
+    MutableArraySequence<std::pair<T, int>> traverse(std::string type="LKP") const {
+        MutableArraySequence<std::pair<T, int>> result;
         if (root) traverse(root, result, 1, type);
         return result;
     }  
@@ -282,7 +272,7 @@ private:
 
     Node* findNode(Node* node, const T& val) const {
         if (!node) return nullptr;
-        
+
         if (val < node->data)
             return findNode(node->left, val);
         else if (node->data < val)
@@ -302,11 +292,11 @@ private:
         copySubtree(src->right, dest->right);
     }
 
-    void findCandidates(Node* node, const T& target, std::vector<Node*>& candidates) const {
+    void findCandidates(Node* node, const T& target, Sequence<Node*>& candidates) const {
         if (!node) return;
         
         if (node->data == target) {
-            candidates.push_back(node);
+            candidates.Append(node);
         }
         
         findCandidates(node->left, target, candidates);
@@ -322,31 +312,18 @@ private:
                compareSubtrees(treeNode->right, subtreeNode->right);
     }
 
-    static Node* buildTree(const std::vector<T>& elements, size_t& index, Traversal type) {
+    static Node* buildTree(const Sequence<T>& elements, size_t& index, std::string type) {
         if (index >= elements.size()) return nullptr;
 
-        static constexpr std::array<std::array<int, 3>, 6> buildOrders = {{
-            {0, 1, 2}, // KLP
-            {0, 2, 1}, // KPL
-            {1, 0, 2}, // LKP
-            {1, 2, 0}, // LPK
-            {2, 0, 1}, // PKL
-            {2, 1, 0}  // PLK
-        }};
-
-        const auto& order = buildOrders[static_cast<int>(type)];
         Node* node = nullptr;
 
-        for (int step : order) {
-            if (step == 0) {
+        for (int i = 0; i < 3; ++i) {
+            if (type[i] == 0)
                 node = new Node(elements[index++]);
-            } 
-            else if (step == 1) {
+            else if (type[i] == 1)
                 node->left = buildTree(elements, index, type);
-            } 
-            else {
+            else
                 node->right = buildTree(elements, index, type);
-            }
         }
 
         return node;
@@ -367,7 +344,11 @@ public:
 
         int tree_height = maxDepth(root);
         int max_pos = 1 << (tree_height + 1);
-        std::vector<std::string> levels(tree_height, std::string(max_pos, ' '));
+
+        MutableArraySequence<std::string> levels;
+        for (int i = 0; i < tree_height; ++i) {
+            levels.Append(std::string(max_pos, ' '));
+        }
 
         std::queue<PrintNode> q;
         q.push({root, 0, max_pos / 2});
@@ -377,7 +358,17 @@ public:
             q.pop();
 
             if (current.node) {
-                std::string val_str = std::to_string(current.node->data);
+                std::string val_str;
+                if constexpr (std::is_same_v<T, int>) {
+                    val_str = std::to_string(current.node->data);
+                } else if constexpr (std::is_same_v<T, double>) {
+                    std::stringstream ss;
+                    ss << std::fixed << std::setprecision(1) << current.node->data;
+                    val_str = ss.str();
+                } else if constexpr (std::is_same_v<T, std::string>) {
+                    val_str = current.node->data;
+                }
+
                 int start_pos = current.pos - val_str.length() / 2;
                 
                 for (int i = 0; i < val_str.length(); i++) {
@@ -407,7 +398,7 @@ public:
     }
 
     void merge(const AVLTree<T>* other) {
-        std::vector<std::pair<T, int>> elements = other->traverse(Traversal::LKP);
+        MutableArraySequence<std::pair<T, int>> elements = other->traverse("LKP");
         
         for (auto val : elements)
             this->insert(val.first);
@@ -424,11 +415,10 @@ public:
     }
 
     bool containsSubtree(AVLTree<T>* subtree) const {
-        if (subtree->empty()) return true;
-        
-        auto subtreeRoot = subtree->traverse(AVLTree<T>::Traversal::KLP).front().first;
-        std::vector<Node*> candidates;
-        findCandidates(root, subtreeRoot, candidates);
+        if (!subtree || subtree->empty()) return true;
+    
+        MutableArraySequence<Node*> candidates;
+        findCandidates(root, subtree->root->data, candidates);
         
         for (Node* candidate : candidates) {
             if (compareSubtrees(candidate, subtree->root)) {
@@ -438,7 +428,7 @@ public:
         return false;
     }
 
-    static AVLTree<T>* buildFromTraversal(const std::vector<T>& elements, Traversal type) {
+    static AVLTree<T>* buildFromTraversal(const Sequence<T>& elements, std::string type) {
         AVLTree<T>* tree = new AVLTree<T>();
         if (elements.empty()) return tree;
 

@@ -5,9 +5,16 @@
 #include <queue>
 #include <vector>
 #include <random>
+#include <typeinfo>
+
+class AVLTreeTesterBase {
+public:
+    virtual ~AVLTreeTesterBase() = default;
+    virtual void runInteractiveTest() = 0;
+};
 
 template <typename T>
-class AVLTreeTester {
+class AVLTreeTester : public AVLTreeTesterBase {
 public:
     void runInteractiveTest() {
         AVLTree<T>* tree = new AVLTree<T>();
@@ -86,7 +93,7 @@ private:
     }
 
     void printTreeLevel(const AVLTree<T>* tree) {
-        auto nodes = tree->traverse(AVLTree<T>::Traversal::LKP); // Используем новый метод
+        auto nodes = tree->traverse("LKP");
         int max_level = getTreeHeight(tree);
         
         for (int lvl = 1; lvl <= max_level; ++lvl) {
@@ -104,37 +111,31 @@ private:
 
     void testTraversals(const AVLTree<T>* tree) {
         std::cout << "Select traversal type:\n"
-                  << "1. KLP (Root-Left-Right)\n"
-                  << "2. KPL (Root-Right-Left)\n"
-                  << "3. LKP (Left-Root-Right)\n"
-                  << "4. LPK (Left-Right-Root)\n"
-                  << "5. PKL (Right-Root-Left)\n"
-                  << "6. PLK (Right-Left-Root)\n"
+                  << "KLP (Root-Left-Right)\n"
+                  << "KPL (Root-Right-Left)\n"
+                  << "LKP (Left-Root-Right)\n"
+                  << "LPK (Left-Right-Root)\n"
+                  << "PKL (Right-Root-Left)\n"
+                  << "PLK (Right-Left-Root)\n"
                   << "Your choice: ";
         
-        int choice;
+        std::string choice;
         std::cin >> choice;
         
-        typename AVLTree<T>::Traversal type;
-        switch (choice) {
-            case 1: type = AVLTree<T>::Traversal::KLP; break;
-            case 2: type = AVLTree<T>::Traversal::KPL; break;
-            case 3: type = AVLTree<T>::Traversal::LKP; break;
-            case 4: type = AVLTree<T>::Traversal::LPK; break;
-            case 5: type = AVLTree<T>::Traversal::PKL; break;
-            case 6: type = AVLTree<T>::Traversal::PLK; break;
-            default:
-                std::cout << "Invalid choice, using LKP by default\n";
-                type = AVLTree<T>::Traversal::LKP;
-        }
-        
         std::cout << "Traversal result: ";
-        printVector(tree->traverse(type));
+        MutableArraySequence<std::pair<T, int>> result = tree->traverse(choice);
+        std::vector<std::pair<T, int>> vec;
+
+        for (auto el : result) {
+            vec.push_back(el);
+        }
+        printVector(vec);
     }
 
-    int getTreeHeight(const AVLTree<T>* tree) {
-        auto traversal = tree->traverse(AVLTree<T>::Traversal::LKP);
-        if (traversal.empty()) return 0;
+    template <typename U>
+    int getTreeHeight(const AVLTree<U>* tree) {
+        auto traversal = tree->traverse("LKP");
+        if (traversal.GetLength() == 0) return 0;
         
         int max_height = 0;
         for (const auto& [value, height] : traversal) {
@@ -174,6 +175,7 @@ private:
             treeToMerge->insert(mergeValue);
         }
         std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         
         tree->merge(treeToMerge);
         std::cout << "After merge:\n";
@@ -183,24 +185,24 @@ private:
     void testMapWhere() {
         std::cout << "\n=== Map/Where Operations Test ===\n";
         AVLTree<T>* tree = new AVLTree<T>();
-        
+
         // Создаем тестовое дерево
-        std::vector<T> testValues = {5, 3, 7, 2, 4, 6, 8};
+        std::vector<T> testValues = getTestValues();
         for (const auto& val : testValues) {
             tree->insert(val);
         }
-        
+
         // Тест map
         std::cout << "Original tree:\n";
         tree->printTreeVisual();
         
-        AVLTree<T>* mappedTree = tree->map([](const T& val) { return val * 2; });
-        std::cout << "\nAfter mapping (values * 2):\n";
+        AVLTree<T>* mappedTree = tree->map(getMapper());
+        std::cout << "\nAfter mapping:\n";
         mappedTree->printTreeVisual();
         
         // Тест where
-        AVLTree<T>* filteredTree = tree->where([](const T& val) { return val % 2 == 0; });
-        std::cout << "\nAfter filtering (even values only):\n";
+        AVLTree<T>* filteredTree = tree->where(getPredicate());
+        std::cout << "\nAfter filtering:\n";
         filteredTree->printTreeVisual();
         // printVector(filteredTree->traverse(AVLTree<T>::Traversal::LKP));
         
@@ -221,7 +223,7 @@ private:
         }
         
         bool passed = true;
-        if (testTree->traverse().size() != testValues.size()) {
+        if (testTree->traverse().GetLength() != testValues.size()) {
             std::cout << "Test 1 (Insert) FAILED\n";
             passed = false;
         }
@@ -281,6 +283,43 @@ private:
         }
         std::cout << "Tree height: " << getTreeHeight(bigTree) << "\n";
     }
+
+private:
+    std::vector<T> getTestValues() {
+        if constexpr (std::is_same_v<T, int>) {
+            return {5, 3, 7, 2, 4, 6, 8};
+        } else if constexpr (std::is_same_v<T, double>) {
+            return {5.1, 3.2, 7.3, 2.4, 4.5, 6.6, 8.7};
+        } else if constexpr (std::is_same_v<T, std::string>) {
+            return {"apple", "banana", "cherry", "date", "fig", "grape", "kiwi"};
+        } else {
+            return {};
+        }
+    }
+
+    std::function<T(const T&)> getMapper() {
+        if constexpr (std::is_same_v<T, int>) {
+            return [](const T& val) { return val * 2; };
+        } else if constexpr (std::is_same_v<T, double>) {
+            return [](const T& val) { return val * 1.5; };
+        } else if constexpr (std::is_same_v<T, std::string>) {
+            return [](const T& val) { return val + val; }; // Конкатенация строк
+        } else {
+            return [](const T& val) { return val; };
+        }
+    }
+
+    std::function<bool(const T&)> getPredicate() {
+        if constexpr (std::is_same_v<T, int>) {
+            return [](const T& val) { return val % 2 == 0; };
+        } else if constexpr (std::is_same_v<T, double>) {
+            return [](const T& val) { return static_cast<int>(val) % 2 == 0; };
+        } else if constexpr (std::is_same_v<T, std::string>) {
+            return [](const T& val) { return val.length() > 4; }; // Длина строки > 4
+        } else {
+            return [](const T&) { return true; };
+        }
+    }
 };
 
 template <>
@@ -290,3 +329,26 @@ inline void AVLTreeTester<std::string>::printVector(const std::vector<std::pair<
     }
     std::cout << "\n";
 }
+
+class AVLTreeTesterFactory {
+public:
+    static AVLTreeTesterBase* createTester() {
+        std::cout << "Select data type:\n"
+                  << "1. int\n"
+                  << "2. double\n"
+                  << "3. std::string\n"
+                  << "Your choice: ";
+        
+        int choice;
+        std::cin >> choice;
+        
+        switch (choice) {
+            case 1: return new AVLTreeTester<int>();
+            case 2: return new AVLTreeTester<double>();
+            case 3: return new AVLTreeTester<std::string>();
+            default:
+                std::cout << "Invalid choice, using int by default\n";
+                return new AVLTreeTester<int>();
+        }
+    }
+};
