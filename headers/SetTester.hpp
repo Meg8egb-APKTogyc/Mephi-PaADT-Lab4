@@ -1,5 +1,6 @@
 #pragma once
 #include "Set.hpp"
+#include "Person.hpp"
 #include <iostream>
 #include <functional>
 #include <string>
@@ -10,14 +11,15 @@
 
 class SetTester {
 public:
-    // Запуск тестирования
     static void runTests() {
         while (true) {
             std::cout << "\n=== Set Implementation Tester ===" << std::endl;
             std::cout << "1. Test with integers" << std::endl;
             std::cout << "2. Test with doubles" << std::endl;
             std::cout << "3. Test with strings" << std::endl;
-            std::cout << "4. Exit" << std::endl;
+            std::cout << "4. Test with Students (auto)" << std::endl;
+            std::cout << "5. Test with Teachers (auto)" << std::endl;
+            std::cout << "6. Exit" << std::endl;
             std::cout << "Select option: ";
 
             int choice;
@@ -26,13 +28,92 @@ public:
             if (choice == 1) testWithType<int>();
             else if (choice == 2) testWithType<double>();
             else if (choice == 3) testWithType<std::string>();
-            else if (choice == 4) break;
+            else if (choice == 4) runAutoTests<Student>();
+            else if (choice == 5) runAutoTests<Teacher>();
+            else if (choice == 6) break;
             else std::cout << "Invalid choice!" << std::endl;
         }
     }
 
 private:
-    // Шаблонный метод для тестирования с конкретным типом
+    template<typename T>
+    static void runAutoTests() {
+        std::cout << "\n=== Running " << typeid(T).name() << " Automatic Tests ===" << std::endl;
+        
+        Set<T> set1, set2;
+        
+        // Заполняем тестовыми данными
+        auto testValues = getTestValues<T>();
+        for (const auto& val : testValues.first) set1.insert(val);
+        for (const auto& val : testValues.second) set2.insert(val);
+        
+        // Тест 1: Проверка размера
+        if (set1.size() != testValues.first.size()) {
+            std::cout << "Test 1 (Insert) FAILED" << std::endl;
+            return;
+        }
+        
+        // Тест 2: Удаление
+        T toRemove = testValues.first[0];
+        set1.remove(toRemove);
+        if (set1.contains(toRemove)) {
+            std::cout << "Test 2 (Remove) FAILED" << std::endl;
+            return;
+        }
+        
+        // Тест 3: Объединение
+        auto unionSet = set1.unionWith(&set2);
+        if (!unionSet->contains(testValues.second[0])) {
+            std::cout << "Test 3 (Union) FAILED" << std::endl;
+            return;
+        }
+        
+        // Тест 4: Пересечение
+        auto intersection = set1.intersectionWith(&set2);
+        if (intersection->size() != expectedIntersectionSize<T>()) {
+            std::cout << "Test 4 (Intersection) FAILED" << std::endl;
+            return;
+        }
+        
+        std::cout << "All tests PASSED!" << std::endl;
+    }
+
+    template<typename T>
+    static std::pair<std::vector<T>, std::vector<T>> getTestValues() {
+        if constexpr (std::is_same_v<T, Student>) {
+            return {
+                {
+                    Student(PersonID("1234", "567890"), "Ivan", "Ivanovich", "Ivanov", 0, "S12345"),
+                    Student(PersonID("2345", "678901"), "Petr", "Petrovich", "Petrov", 0, "S23456")
+                },
+                {
+                    Student(PersonID("3456", "789012"), "Anna", "Andreevna", "Sidorova", 0, "S34567"),
+                    Student(PersonID("2345", "678901"), "Petr", "Petrovich", "Petrov", 0, "S23456")
+                }
+            };
+        } else if constexpr (std::is_same_v<T, Teacher>) {
+            return {
+                {
+                    Teacher(PersonID("4567", "890123"), "Sergey", "Sergeevich", "Smirnov", 0, "Mathematics"),
+                    Teacher(PersonID("5678", "901234"), "Olga", "Olegovna", "Kuznetsova", 0, "Physics")
+                },
+                {
+                    Teacher(PersonID("6789", "012345"), "Dmitry", "Dmitrievich", "Volkov", 0, "Computer Science"),
+                    Teacher(PersonID("5678", "901234"), "Olga", "Olegovna", "Kuznetsova", 0, "Physics")
+                }
+            };
+        }
+        return {};
+    }
+
+    template<typename T>
+    static size_t expectedIntersectionSize() {
+        if constexpr (std::is_same_v<T, Student> || std::is_same_v<T, Teacher>) {
+            return 1;
+        }
+        return 0;
+    }
+
     template<typename T>
     static void testWithType() {
         std::unique_ptr<Set<T>> set1(new Set<T>());
@@ -143,7 +224,7 @@ private:
     }
 };
 
-// Специализация для работы со строками (чтобы cin работал корректно)
+
 template<>
 void SetTester::handleOperation<std::string>(int op, Set<std::string>& set1, Set<std::string>& set2) {
     std::string value;
